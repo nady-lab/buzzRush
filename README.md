@@ -1,120 +1,83 @@
-# Buzz Rush
+# buzz rush
 
-## Overview
+a little bee game for the **STM32 Nucleo-F031K6**, written in C with PlatformIO. you're a bee, there are eight flowers, and only one of them is the right one. pick correctly and your score goes up, pick wrong and you lose a life (you get five).
 
-**Buzz Rush** is an embedded systems game developed for the **STM32F031K6** microcontroller using C and PlatformIO.
+<!-- add a photo or gif of the board running here, e.g. ![buzz rush gameplay](assets/demo.gif) -->
 
-The player controls a bee that moves around the screen and must identify the **correct flower** from eight randomly generated options. Selecting the correct flower increases the score, while incorrect choices reduce lives.
+## a lil about this
+my first time ever wiring a microcontroller, and somehow my favorite part of my CS course<br/>
+i wrote the movement, drew the sprites in LibreSprite, added sound, and got a real taste of hardware<br/>
+it ended up covering GPIO input, SPI display control, UART, timers, interrupts and sound generation, all in one project
 
-The project demonstrates core embedded programming concepts including **GPIO input handling, SPI display control, UART communication, timers, interrupts, and sound generation**.
+## what you need
 
----
+an STM32 Nucleo-F031K6 (the on-board ST-Link handles flashing and serial over the same USB cable), a 128 x 160 SPI LCD, five push buttons, a green and a red LED, a small buzzer, and [PlatformIO](https://platformio.org/) (VS Code extension or CLI).
 
-## Technical Information
+| part | pin |
+|------|-----|
+| up button | PA8 |
+| down button | PA11 |
+| left button | PB5 |
+| right button | PB4 |
+| pause button | PB0 |
+| green LED | PA9 |
+| red LED | PA10 |
+| buzzer | PB1 (Timer14 PWM) |
+| LCD reset / CS / D/C | PA3 / PA4 / PA6 |
+| UART TX / RX | PA2 / PA15 (ST-Link virtual COM port) |
 
-- **Microcontroller:** STM32F031K6  
-- **Programming Language:** C  
-- **Display:** 128 × 160 SPI LCD  
-- **Development Environment:** PlatformIO (VS Code)  
-- **Graphics:** Custom sprites (LibreSprite)  
-- **Communication:** UART (serial input/output)  
-- **Audio:** Timer-based sound generation (PWM via Timer14)
+buttons are active low with the internal pull-ups on, so wire each one between its pin and GND. the LCD clock and data go over SPI1.
 
----
+## build and flash
 
-## Game Features
+```bash
+git clone https://github.com/nady-lab/buzzRush.git
+cd buzzRush
 
-- **Main Menu System**
-  - Start screen with instructions
-  - Button-controlled navigation
+# build
+pio run
 
-- **Player Movement**
-  - Controlled using hardware buttons (GPIO input)
-  - Direction-based sprite rendering
+# flash the board over USB (ST-Link)
+pio run -t upload
+```
 
-- **Randomised Gameplay**
-  - Random correct flower each round (`rand() % 8`)
-  - Random flower appearances for visual variation
+the project uses the `nucleo_f031k6` environment with the CMSIS framework, so there are no extra libraries to install.
 
-- **Lives & Score System**
-  - Score increases when correct flower is selected
-  - Lives decrease when incorrect flower is selected
-  - Real-time HUD display
+the game prints debug messages (score, lives, events) over UART at **9600 baud**:
 
-- **LED Feedback**
-  - Green LED → Correct choice  
-  - Red LED → Incorrect choice  
+```bash
+pio device monitor -b 9600
+```
 
-- **Sound Effects**
-  - Positive sound sequence for correct selection  
-  - Negative sound for incorrect selection  
-  - Game over sound effect  
-  - Implemented using timer-based frequency control
+## controls
 
-- **Pause Functionality**
-  - Dedicated button pauses and resumes the game
-  - Game state is preserved and restored
+| input | action |
+|-------|--------|
+| up / down / left / right | move the bee (up also starts and restarts the game) |
+| pause button (PB0) | pause / resume |
+| `Q` / `q` in the serial monitor | quit |
 
-- **Restart / Replay**
-  - Game restarts from Game Over screen
-  - Full reset of score, lives, and game state
+## how it works
 
-- **Serial Communication (UART)**
-  - Press **Q/q** in terminal to quit the game
-  - Debug messages printed (score, lives, events)
+the start screen waits for you to press up. each round picks a random correct flower (`rand() % 8`) and scatters random flower sprites around the screen. touch the right one and you get the green LED and a happy jingle, touch a wrong one and you get the red LED and a sad sound. run out of lives and you get a game over tune, then a full reset if you want another go. pause freezes everything and puts it back exactly how it was when you resume.
 
----
+### under the hood:
 
-## Controls
+**game loop:** an outer loop handles restarts and an inner loop runs the active game.<br/>
+**timing:** a 1 ms SysTick interrupt drives delays and game timing.<br/>
+**collisions:** bounding box checks with `isInside()` detect when the bee overlaps a flower, then the score or lives update, the sound and LED play, and the flowers get repositioned.<br/>
+**rendering:** sprites and pixels are drawn over SPI, and the screen only redraws when something moves, which cuts down flicker.<br/>
+**sound:** Timer14 runs at 65536 Hz and the note frequency sets the auto-reload value, giving a 50% duty cycle PWM on PB1.
 
-| Input | Action |
-|------|--------|
-| UP | Move up / Start game / Restart |
-| DOWN | Move down |
-| LEFT | Move left |
-| RIGHT | Move right |
-| Button (PB0) | Pause / Resume |
-| Q / q | Quit game (via serial terminal) |
+## making your own sprites
 
----
+sprites live in `assets/sprites` as `.bmp` files. `assets/bmptoh.py` turns a bitmap into the 16-bit pixel values used in `src/sprites.h`:
 
-## Implementation Details
+```bash
+pip install pillow
+python assets/bmptoh.py assets/sprites/bee/beeUp.bmp
+```
 
-- **Game Loop Structure**
-  - Outer loop → handles restarting the game  
-  - Inner loop → handles active gameplay  
+## what's next
 
-- **Timing System**
-  - SysTick interrupt runs every **1ms**
-  - Used for delays and game timing control
-
-- **Collision Detection**
-  - Based on bounding box checks using `isInside()`
-  - Detects overlap between bee and flowers
-
-- **Game Logic**
-  - Correct flower stored as an index
-  - Collision triggers:
-    - Score/life updates
-    - Sound + LED feedback
-    - Flower reset and repositioning
-
-- **Rendering System**
-  - SPI communication used to draw pixels and sprites
-  - Screen updated only when movement occurs → reduces flicker
-
----
-
-## Conclusion
-
-This project demonstrates a complete embedded game system using the STM32 platform. It integrates **real-time input handling, graphical rendering, sound generation, and serial communication** into a fully interactive application.
-
----
-
-## Future Improvements
-
-- Add difficulty scaling (faster movement, more flowers)
-- Store high scores in non-volatile memory
-- Improve animation (frame-based movement)
-- Add background music
-- Implement RTOS (e.g., FreeRTOS) for task management
+difficulty scaling (faster movement, more flowers), saving high scores to non-volatile memory, frame-based animation, background music, and maybe moving to FreeRTOS for task management.
